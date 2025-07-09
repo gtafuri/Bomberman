@@ -89,7 +89,6 @@ void desenhar_mapa(Mapa *m) {
     }
 }
 
-// --- Jogador ---
 Jogador inicializar_jogador(Mapa *m) {
     Jogador j = {0};
     for (int i = 0; i < m->linhas; i++) {
@@ -159,7 +158,7 @@ void desenhar_bomba(Bomba b) {
         DrawCircle(b.coluna * 20 + 10, b.linha * 20 + 10, 8, ORANGE);
 }
 
-// --- main ---
+
 int main(void) {
     InitWindow(1200, 600, "Bomberman UFRJ");
     SetTargetFPS(60);
