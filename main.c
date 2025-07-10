@@ -1,4 +1,4 @@
-include <raylib.h>
+#include <raylib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -177,6 +177,8 @@ void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencive
             // Verifica se jogador está na explosão
             if (*invencivel == 0 && jogadorAtingidoPorExplosao(b, jogador, mapa)) {
                 jogador->vidas--;
+                jogador->pontuacao -= 100;
+                if (jogador->pontuacao < 0) jogador->pontuacao = 0;
                 *invencivel = 60;
             }
             jogador->bombas++;
@@ -306,7 +308,9 @@ void checarColisaoJogadorInimigo(Jogador *jogador, Inimigo *lista, int *invenciv
     for (Inimigo *ini = lista; ini; ini = ini->prox) {
         if (ini->ativo && ini->pos.x == jogador->pos.x && ini->pos.y == jogador->pos.y && *invencivel == 0) {
             jogador->vidas--;
-            *invencivel = 60; // 1 segundo de invencibilidade
+            jogador->pontuacao -= 100;
+            if (jogador->pontuacao < 0) jogador->pontuacao = 0;
+            *invencivel = 60; // 1 segundo de invencel
         }
     }
 }
@@ -615,7 +619,7 @@ int main(void) {
             }
         }
 
-       // Plantar bomba
+        // Plantar bomba
         if ((IsKeyPressed(KEY_B) || IsKeyPressed(KEY_SPACE)) && jogador.bombas > 0) {
             int bx = jogador.pos.x + lastDirX;
             int by = jogador.pos.y + lastDirY;
