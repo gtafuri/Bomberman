@@ -17,7 +17,7 @@ void desenharMapa(const Mapa *mapa) {
                 case 'K': cor = YELLOW; break;    // Caixa com chave
                 case 'B': cor = YELLOW; break;   // Caixa sem chave
                 case 'E': cor = RED; break;      // Inimigo
-                case 'J': cor = BLUE; break;     // Jogador (posição inicial)
+                case 'J': cor = RAYWHITE; break;     // Jogador (posição inicial)
                 case ' ': cor = RAYWHITE; break; // Espaço vazio
                 default: cor = LIGHTGRAY; break;
             }
