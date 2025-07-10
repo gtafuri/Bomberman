@@ -1,4 +1,4 @@
-#include <raylib.h>
+include <raylib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +19,30 @@
 
 #define MAX_MAPAS 100
 #define MAX_MAPA_PATH 260
+
+#define RANKING_FILE "ranking.bin"
+#define MAX_RANK 10
+
+void atualizarRanking(int novaPontuacao, int *posicao) {
+    int ranking[MAX_RANK] = {0};
+    FILE *f = fopen(RANKING_FILE, "rb");
+    if (f) {
+        fread(ranking, sizeof(int), MAX_RANK, f);
+        fclose(f);
+    }
+    *posicao = -1;
+    for (int i = 0; i < MAX_RANK; i++) {
+        if (novaPontuacao > ranking[i]) {
+            for (int j = MAX_RANK-1; j > i; j--) ranking[j] = ranking[j-1];
+            ranking[i] = novaPontuacao;
+            *posicao = i;
+            break;
+        }
+    }
+    f = fopen(RANKING_FILE, "wb");
+    fwrite(ranking, sizeof(int), MAX_RANK, f);
+    fclose(f);
+}
 
 // encontrar posição inicial do jogador
 void encontrarPosicaoJogador(const Mapa *mapa, Jogador *jogador) {
@@ -465,9 +489,14 @@ int main(void) {
     while (!WindowShouldClose()) {
         if (jogador.vidas <= 0) gameover = 1;
         if (gameover) {
+            int posicao_rank = -1;
+            atualizarRanking(jogador.pontuacao, &posicao_rank);
             BeginDrawing();
             ClearBackground(BLACK);
             DrawText("GAME OVER", 400, 300, 80, RED);
+            if (posicao_rank != -1) {
+                DrawText(TextFormat("Você obteve a %dª maior pontuação! Parabéns!", posicao_rank+1), 300, 370, 30, GOLD);
+            }
             const char* msg = "Pressione TAB para reiniciar ou ESC para sair do jogo";
             int fontSize = 30;
             int textWidth = MeasureText(msg, fontSize);
@@ -613,9 +642,14 @@ int main(void) {
         if (jogador.chaves >= 5) {
             mapa_atual++;
             if (mapa_atual >= total_mapas) {
+                int posicao_rank = -1;
+                atualizarRanking(jogador.pontuacao, &posicao_rank);
                 BeginDrawing();
                 ClearBackground(RAYWHITE);
                 DrawText("Parabéns! Você venceu todos os mapas!", 300, 300, 40, DARKGREEN);
+                if (posicao_rank != -1) {
+                    DrawText(TextFormat("Você obteve a %dª maior pontuação! Parabéns!", posicao_rank+1), 300, 370, 30, GOLD);
+                }
                 EndDrawing();
                 WaitTime(3.0);
                 break;
