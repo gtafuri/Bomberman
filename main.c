@@ -485,6 +485,7 @@ int main(void) {
     int menu_selecionado = 0;
     int tick_inimigo = 0;
     int tick_jogador = 0;
+    int lastDirX = 1, lastDirY = 0; // Começa para a direita
 
     while (!WindowShouldClose()) {
         if (jogador.vidas <= 0) gameover = 1;
@@ -609,25 +610,16 @@ int main(void) {
             if ((dx != 0 || dy != 0) && podeMover(mapa, novoX, novoY)) {
                 jogador.pos.x = novoX;
                 jogador.pos.y = novoY;
+                lastDirX = dx;
+                lastDirY = dy;
             }
         }
 
-        // Plantar bomba
+       // Plantar bomba
         if ((IsKeyPressed(KEY_B) || IsKeyPressed(KEY_SPACE)) && jogador.bombas > 0) {
-            // Posição à frente do jogador
-            int dirX = 0, dirY = 0;
-            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) dirX = 1;
-            else if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) dirX = -1;
-            else if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) dirY = -1;
-            else if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) dirY = 1;
-            int bx = jogador.pos.x + dirX;
-            int by = jogador.pos.y + dirY;
-            // Se não houver direção pressionada, planta na posição do jogador
-            if (dirX == 0 && dirY == 0) {
-                bx = jogador.pos.x;
-                by = jogador.pos.y;
-            }
-            // Só planta se for espaço vazio
+            int bx = jogador.pos.x + lastDirX;
+            int by = jogador.pos.y + lastDirY;
+            // Só planta se houver direção pressionada e espaço válido
             if (podeMover(mapa, bx, by)) {
                 plantarBomba(&bombas, bx, by);
                 jogador.bombas--;
