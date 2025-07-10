@@ -7,17 +7,23 @@
 #include "mapa.h"
 #include "ui.h"
 #include <time.h>
+#include <dirent.h> // para ver o diretorio de mapas 
 
 #define MAPA_ARQUIVO "maps/mapa1.txt"
 #define BLOCO 20
 #define HUD_ALTURA 100
-#define TEMPO_BOMBA 180 // 3 segundos a 60 FPS
+#define TEMPO_BOMBA 180 
 #define RAIO_EXPLOSAO 5
-#define INTERVALO_INIMIGO 10 // frames para mudar direção (mais rápido)
-
+#define INTERVALO_INIMIGO 40 // frames para mudar direção dos inimigos (acho q da pra diminuir e botar mais lento)
 #define SAVE_FILE "savegame.bin"
 
-// Função auxiliar para encontrar posição inicial do jogador
+#define MAX_MAPAS 100
+#define MAX_MAPA_PATH 260
+char mapas[MAX_MAPAS][MAX_MAPA_PATH];
+int total_mapas = 0;
+int mapa_atual = 0;
+
+// encontrar posição inicial do jogador
 void encontrarPosicaoJogador(const Mapa *mapa, Jogador *jogador) {
     for (int i = 0; i < mapa->linhas; i++) {
         for (int j = 0; j < mapa->colunas; j++) {
@@ -52,14 +58,47 @@ void plantarBomba(Bomba **lista, int x, int y) {
     *lista = nova;
 }
 
-// Função para processar explosão da bomba
+// Adicionar estrutura para animação de explosão
+// não soube usar isso aq direito galera alguem reve aí pfvr, a ideia é amimar alguns quadradinhos pra mostrar a explosao
+#define MAX_EXPLOSIONS 32
+
+typedef struct {
+    int x, y;
+    int frame;
+    int ativa;
+} ExplosionAnim;
+
+ExplosionAnim explosoes[MAX_EXPLOSIONS] = {0};
+
+void adicionarExplosao(int x, int y) {
+    for (int i = 0; i < MAX_EXPLOSIONS; i++) {
+        if (!explosoes[i].ativa) {
+            explosoes[i].x = x;
+            explosoes[i].y = y;
+            explosoes[i].frame = 0;
+            explosoes[i].ativa = 1;
+            break;
+        }
+    }
+}
+
+void desenharExplosoes() {
+    for (int i = 0; i < MAX_EXPLOSIONS; i++) {
+        if (explosoes[i].ativa) {
+            float raio = BLOCO/2 + explosoes[i].frame*2;
+            Color cor = (explosoes[i].frame % 2 == 0) ? YELLOW : ORANGE;
+            DrawCircle(explosoes[i].x * BLOCO + BLOCO/2, explosoes[i].y * BLOCO + BLOCO/2, raio, Fade(cor, 0.7f));
+            explosoes[i].frame++;
+            if (explosoes[i].frame > 8) explosoes[i].ativa = 0;
+        }
+    }
+}
+
+// Modificar explodirBomba para adicionar animação
 void explodirBomba(Bomba *b, Jogador *jogador, Mapa *mapa) {
     int x0 = b->pos.x;
     int y0 = b->pos.y;
-    // Explode na posição central
-    // (Efeito: desenhar explosão por 1 frame)
-    DrawRectangle(x0 * BLOCO, y0 * BLOCO, BLOCO, BLOCO, ORANGE);
-    // Explode nas 4 direções
+    adicionarExplosao(x0, y0);
     for (int d = 0; d < 4; d++) {
         int dx = 0, dy = 0;
         if (d == 0) dx = 1;   // Direita
@@ -71,29 +110,12 @@ void explodirBomba(Bomba *b, Jogador *jogador, Mapa *mapa) {
             int y = y0 + dy * r;
             if (x < 0 || y < 0 || x >= mapa->colunas || y >= mapa->linhas) break;
             char *c = &mapa->matriz[y][x];
-            if (*c == 'W') break; // Parede indestrutível bloqueia
-            if (*c == 'D') {
-                *c = ' ';
-                jogador->pontuacao += 10;
-                break; // Parede destrutível bloqueia
-            }
-            if (*c == 'K') {
-                *c = 'C'; // Chave revelada
-                jogador->pontuacao += 10;
-                break; // Caixa com chave bloqueia
-            }
-            if (*c == 'B') {
-                *c = ' ';
-                jogador->pontuacao += 10;
-                break; // Caixa sem chave bloqueia
-            }
-            if (*c == 'E') {
-                *c = ' ';
-                jogador->pontuacao += 20;
-                // Não bloqueia, explosão continua
-            }
-            // Efeito visual
-            DrawRectangle(x * BLOCO, y * BLOCO, BLOCO, BLOCO, ORANGE);
+            if (*c == 'W') break;
+            if (*c == 'D') { *c = ' '; jogador->pontuacao += 10; adicionarExplosao(x, y); break; }
+            if (*c == 'K') { *c = 'C'; jogador->pontuacao += 10; adicionarExplosao(x, y); break; }
+            if (*c == 'B') { *c = ' '; jogador->pontuacao += 10; adicionarExplosao(x, y); break; }
+            if (*c == 'E') { *c = ' '; jogador->pontuacao += 20; adicionarExplosao(x, y); }
+            else adicionarExplosao(x, y);
         }
     }
 }
@@ -129,8 +151,7 @@ void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencive
     while (*ptr) {
         Bomba *b = *ptr;
         b->tempo_restante--;
-        if (b->tempo_restante <= 0) {
-            // Explodir bomba (real)
+        if (b->tempo_restante <= 0) { 
             explodirBomba(b, jogador, mapa);
             // Verifica se jogador está na explosão
             if (*invencivel == 0 && jogadorAtingidoPorExplosao(b, jogador, mapa)) {
@@ -197,7 +218,7 @@ int podeMoverInimigo(const Mapa *mapa, int x, int y) {
     if (x < 0 || y < 0 || x >= mapa->colunas || y >= mapa->linhas)
         return 0;
     char c = mapa->matriz[y][x];
-    if (c == 'W' || c == 'D' || c == 'K' || c == 'B')
+    if (c == 'W' || c == 'D' || c == 'K' || c == 'B' || c == 'E')
         return 0;
     return 1;
 }
@@ -252,13 +273,14 @@ void removerInimigosExplodidos(Inimigo **lista, const Mapa *mapa) {
 // Desenha inimigos
 void desenharInimigos(const Inimigo *lista) {
     for (const Inimigo *ini = lista; ini; ini = ini->prox) {
-        if (ini->ativo)
-            DrawRectangle(ini->pos.x * BLOCO, ini->pos.y * BLOCO, BLOCO, BLOCO, RED);
+        if (ini->ativo) {
+            DrawCircleLines(ini->pos.x * BLOCO + BLOCO/2, ini->pos.y * BLOCO + BLOCO/2, BLOCO/2-2, BLACK);
+            DrawCircle(ini->pos.x * BLOCO + BLOCO/2, ini->pos.y * BLOCO + BLOCO/2, BLOCO/2-4, RED);
+        }
     }
 }
 
-// Verifica colisão jogador-inimigo 
-//Nao tá funcionando, mas nao consigo pensar em outra logica socorro
+// Verifica colisão jogador-inimigo
 void checarColisaoJogadorInimigo(Jogador *jogador, Inimigo *lista, int *invencivel) {
     for (Inimigo *ini = lista; ini; ini = ini->prox) {
         if (ini->ativo && ini->pos.x == jogador->pos.x && ini->pos.y == jogador->pos.y && *invencivel == 0) {
@@ -362,6 +384,40 @@ void desenharMenu(int selecionado) {
     }
 }
 
+// Função para listar mapas disponíveis
+void listarMapas() {
+    DIR *d = opendir("maps");
+    struct dirent *dir;
+    total_mapas = 0;
+    while ((dir = readdir(d)) != NULL) {
+        if (strncmp(dir->d_name, "mapa", 4) == 0 && strstr(dir->d_name, ".txt")) {
+            snprintf(mapas[total_mapas], MAX_MAPA_PATH, "maps/%s", dir->d_name);
+            total_mapas++;
+            if (total_mapas >= MAX_MAPAS) break;
+        }
+    }
+    closedir(d);
+    // Ordenar mapas por nome
+    for (int i = 0; i < total_mapas-1; i++) {
+        for (int j = i+1; j < total_mapas; j++) {
+            if (strcmp(mapas[i], mapas[j]) > 0) {
+                char tmp[MAX_MAPA_PATH]; strcpy(tmp, mapas[i]); strcpy(mapas[i], mapas[j]); strcpy(mapas[j], tmp);
+            }
+        }
+    }
+}
+
+// Função para validar mapa
+int validarMapa(const Mapa *mapa) {
+    int chaves = 0, inimigos = 0;
+    for (int i = 0; i < mapa->linhas; i++)
+        for (int j = 0; j < mapa->colunas; j++) {
+            if (mapa->matriz[i][j] == 'K') chaves++;
+            if (mapa->matriz[i][j] == 'E') inimigos++;
+        }
+    return (chaves == 5 && inimigos == 5);
+}
+
 int main(void) {
     const int screenWidth = 1200;
     const int screenHeight = 600 + HUD_ALTURA;
@@ -369,10 +425,20 @@ int main(void) {
     SetTargetFPS(60);
     srand(time(NULL));
 
-    // Carregar mapa
-    Mapa *mapa = carregarMapa(MAPA_ARQUIVO);
+    listarMapas();
+    if (total_mapas == 0) {
+        printf("Nenhum mapa encontrado!\n");
+        CloseWindow();
+        return 1;
+    }
+    mapa_atual = 0;
+    Mapa *mapa = carregarMapa(mapas[mapa_atual]);
     if (!mapa) {
-        printf("Erro ao carregar o mapa!\n");
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        DrawText("Erro ao carregar o mapa!", 100, 300, 32, RED);
+        EndDrawing();
+        WaitTime(3.0);
         CloseWindow();
         return 1;
     }
@@ -390,8 +456,10 @@ int main(void) {
     int frame = 0;
     int invencivel = 0;
     int gameover = 0;
-    int menu_aberto = 0;
+    int menu_aberto = 1; // Começa com o menu aberto
     int menu_selecionado = 0;
+    int tick_inimigo = 0;
+    int tick_jogador = 0;
 
     while (!WindowShouldClose()) {
         if (jogador.vidas <= 0) gameover = 1;
@@ -399,13 +467,47 @@ int main(void) {
             BeginDrawing();
             ClearBackground(BLACK);
             DrawText("GAME OVER", 400, 300, 80, RED);
-            DrawText("Pressione ESC para sair", 420, 400, 30, WHITE);
+            const char* msg = "Pressione TAB para reiniciar ou ESC para sair do jogo";
+            int fontSize = 30;
+            int textWidth = MeasureText(msg, fontSize);
+            DrawText(msg, (screenWidth - textWidth)/2, 400, fontSize, WHITE);
             EndDrawing();
+            if (IsKeyPressed(KEY_TAB)) {
+                // Reinicialize o estado do jogo
+                while (bombas) { Bomba *tmp = bombas; bombas = bombas->prox; free(tmp); }
+                while (inimigos) { Inimigo *tmp = inimigos; inimigos = inimigos->prox; free(tmp); }
+                liberarMapa(mapa);
+                mapa_atual = 0;
+                mapa = carregarMapa(mapas[mapa_atual]);
+                encontrarPosicaoJogador(mapa, &jogador);
+                jogador.vidas = 3;
+                jogador.bombas = 3;
+                jogador.pontuacao = 0;
+                jogador.chaves = 0;
+                bombas = NULL;
+                inimigos = inicializarInimigos(mapa);
+                frame = 0;
+                invencivel = 0;
+                menu_aberto = 1;
+                gameover = 0;
+            }
             continue;
         }
         frame++;
         if (invencivel > 0) invencivel--;
-        // Abrir/fechar menu
+        tick_inimigo++;
+        if (tick_inimigo >= 20) { // Inimigos andam a cada 20 frames
+            limparInimigosMapa(mapa);
+            for (Inimigo *ini = inimigos; ini; ini = ini->prox) {
+                mapa->matriz[ini->pos.y][ini->pos.x] = 'E';
+            }
+            atualizarInimigos(inimigos, mapa, frame);
+            tick_inimigo = 0;
+        }
+        removerInimigosExplodidos(&inimigos, mapa);
+        checarColisaoJogadorInimigo(&jogador, inimigos, &invencivel);
+
+        // Permitir abrir/fechar menu com TAB durante o jogo
         if (IsKeyPressed(KEY_TAB)) menu_aberto = !menu_aberto;
         if (menu_aberto) {
             // Navegação
@@ -418,8 +520,8 @@ int main(void) {
                     while (bombas) { Bomba *tmp = bombas; bombas = bombas->prox; free(tmp); }
                     while (inimigos) { Inimigo *tmp = inimigos; inimigos = inimigos->prox; free(tmp); }
                     liberarMapa(mapa);
-                    // Recarregue o mapa e reinicialize tudo
-                    mapa = carregarMapa(MAPA_ARQUIVO);
+                    mapa_atual = 0;
+                    mapa = carregarMapa(mapas[mapa_atual]);
                     encontrarPosicaoJogador(mapa, &jogador);
                     jogador.vidas = 3;
                     jogador.bombas = 3;
@@ -453,17 +555,24 @@ int main(void) {
             EndDrawing();
             continue;
         }
-        // Movimentação do jogador
-        int dx = 0, dy = 0;
-        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) dx = 1;
-        if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) dx = -1;
-        if (IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W)) dy = -1;
-        if (IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S)) dy = 1;
-        int novoX = jogador.pos.x + dx;
-        int novoY = jogador.pos.y + dy;
-        if ((dx != 0 || dy != 0) && podeMover(mapa, novoX, novoY)) {
-            jogador.pos.x = novoX;
-            jogador.pos.y = novoY;
+        tick_jogador++;
+        int pode_andar = 0;
+        if (tick_jogador >= 12) {
+            pode_andar = 1;
+            tick_jogador = 0;
+        }
+        if (pode_andar) {
+            int dx = 0, dy = 0;
+            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) dx = 1;
+            if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) dx = -1;
+            if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) dy = -1;
+            if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) dy = 1;
+            int novoX = jogador.pos.x + dx;
+            int novoY = jogador.pos.y + dy;
+            if ((dx != 0 || dy != 0) && podeMover(mapa, novoX, novoY)) {
+                jogador.pos.x = novoX;
+                jogador.pos.y = novoY;
+            }
         }
 
         // Plantar bomba
@@ -491,18 +600,30 @@ int main(void) {
         // Atualizar bombas (explosão)
         atualizarBombas(&bombas, &jogador, mapa, &invencivel);
 
-        // Limpar todos os 'E' do mapa e coloque nas posições atuais dos inimigos
-        limparInimigosMapa(mapa);
-        for (Inimigo *ini = inimigos; ini; ini = ini->prox) {
-            mapa->matriz[ini->pos.y][ini->pos.x] = 'E';
-        }
-        // Atualizar inimigos
-        atualizarInimigos(inimigos, mapa, frame);
-        removerInimigosExplodidos(&inimigos, mapa);
-        checarColisaoJogadorInimigo(&jogador, inimigos, &invencivel);
-
         // Coletar chave
         coletarChave(&jogador, mapa);
+        if (jogador.chaves >= 5) {
+            mapa_atual++;
+            if (mapa_atual >= total_mapas) {
+                BeginDrawing();
+                ClearBackground(RAYWHITE);
+                DrawText("Parabéns! Você venceu todos os mapas!", 300, 300, 40, DARKGREEN);
+                EndDrawing();
+                WaitTime(3.0);
+                break;
+            }
+            liberarMapa(mapa);
+            mapa = carregarMapa(mapas[mapa_atual]);
+            if (!mapa) {
+                printf("Erro ao carregar o mapa!\n");
+                return 1;
+            }
+            encontrarPosicaoJogador(mapa, &jogador);
+            jogador.chaves = 0;
+            jogador.bombas = 3;
+            bombas = NULL;
+            inimigos = inicializarInimigos(mapa);
+        }
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
@@ -510,7 +631,8 @@ int main(void) {
         desenharBombas(bombas);
         desenharChaves(mapa);
         desenharInimigos(inimigos);
-        DrawRectangle(jogador.pos.x * BLOCO, jogador.pos.y * BLOCO, BLOCO, BLOCO, invencivel ? LIGHTGRAY : BLUE);
+        DrawCircleLines(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-2, WHITE);
+        DrawCircle(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-4, invencivel && (frame%10<5) ? Fade(BLUE,0.3f) : BLUE);
         desenharHUD(&jogador);
         if (tempo_mensagem > 0) {
             DrawText(mensagem, 800, BLOCO * 25 + 50, 28, DARKGREEN);
