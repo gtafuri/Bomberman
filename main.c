@@ -13,7 +13,7 @@
 #define BLOCO 20
 #define HUD_ALTURA 100
 #define TEMPO_BOMBA 180
-#define RAIO_EXPLOSAO 5
+#define RAIO_EXPLOSAO 2
 #define INTERVALO_INIMIGO 40 // frames para mudar direção dos inimigos (acho q da pra diminuir e botar mais lento)
 #define SAVE_FILE "savegame.bin"
 
