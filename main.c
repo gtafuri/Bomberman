@@ -7,12 +7,12 @@
 #include "mapa.h"
 #include "ui.h"
 #include <time.h>
-#include <dirent.h> // para ver o diretorio de mapas 
+#include <dirent.h> // para ver o diretorio de mapas
 
 #define MAPA_ARQUIVO "maps/mapa1.txt"
 #define BLOCO 20
 #define HUD_ALTURA 100
-#define TEMPO_BOMBA 180 
+#define TEMPO_BOMBA 180
 #define RAIO_EXPLOSAO 5
 #define INTERVALO_INIMIGO 40 // frames para mudar direção dos inimigos (acho q da pra diminuir e botar mais lento)
 #define SAVE_FILE "savegame.bin"
@@ -57,14 +57,24 @@ void encontrarPosicaoJogador(const Mapa *mapa, Jogador *jogador) {
     }
 }
 
-// Verifica se a posição é válida para o jogador andar
-int podeMover(const Mapa *mapa, int x, int y) {
+// Verifica se a posição é válida para o jogador andar - ALTERADO PARA NAO PASSAR POR CIMA DAS BOMBAS
+int podeMover(const Mapa *mapa, const Bomba *bombas, int x, int y) {
     if (x < 0 || y < 0 || x >= mapa->colunas || y >= mapa->linhas)
         return 0;
     char c = mapa->matriz[y][x];
-    // Não pode atravessar paredes nem caixas
+    // Não pode atravessar paredes nem caixas, ou bombas
     if (c == 'W' || c == 'D' || c == 'K' || c == 'B')
         return 0;
+
+    // Adicionar verificação para bombas ativas
+    const Bomba *current_bomba = bombas;
+    while (current_bomba != NULL) {
+        if (current_bomba->pos.x == x && current_bomba->pos.y == y && current_bomba->ativa) {
+            return 0; // Colidiu com uma bomba
+        }
+        current_bomba = current_bomba->prox;
+    }
+
     return 1;
 }
 
@@ -172,7 +182,7 @@ void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencive
     while (*ptr) {
         Bomba *b = *ptr;
         b->tempo_restante--;
-        if (b->tempo_restante <= 0) { 
+        if (b->tempo_restante <= 0) {
             explodirBomba(b, jogador, mapa);
             // Verifica se jogador está na explosão
             if (*invencivel == 0 && jogadorAtingidoPorExplosao(b, jogador, mapa)) {
@@ -605,13 +615,21 @@ int main(void) {
         }
         if (pode_andar) {
             int dx = 0, dy = 0;
-            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) dx = 1;
-            if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) dx = -1;
-            if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) dy = -1;
-            if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) dy = 1;
+
+            // ALTERADO PARA NAO CORRER NA DIAGONAL
+            if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) {
+                dy = -1;
+            } else if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) {
+                dy = 1;
+            } else if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
+                dx = -1;
+            } else if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) {
+                dx = 1;
+            }
+
             int novoX = jogador.pos.x + dx;
             int novoY = jogador.pos.y + dy;
-            if ((dx != 0 || dy != 0) && podeMover(mapa, novoX, novoY)) {
+            if ((dx != 0 || dy != 0) && podeMover(mapa, bombas, novoX, novoY)) { // Passa a lista de bombas
                 jogador.pos.x = novoX;
                 jogador.pos.y = novoY;
                 lastDirX = dx;
@@ -623,8 +641,9 @@ int main(void) {
         if ((IsKeyPressed(KEY_B) || IsKeyPressed(KEY_SPACE)) && jogador.bombas > 0) {
             int bx = jogador.pos.x + lastDirX;
             int by = jogador.pos.y + lastDirY;
-            // Só planta se houver direção pressionada e espaço válido
-            if (podeMover(mapa, bx, by)) {
+            // Só planta se houver direção pressionada e espaço válido, e se não houver bomba já na posição
+            // A função podeMover já verifica a colisão com bombas, então podemos usá-la aqui.
+            if (podeMover(mapa, bombas, bx, by)) { // Reusa podeMover para verificar se o local da bomba é válido
                 plantarBomba(&bombas, bx, by);
                 jogador.bombas--;
             }
@@ -693,4 +712,4 @@ int main(void) {
     liberarMapa(mapa);
     CloseWindow();
     return 0;
-} 
+}
