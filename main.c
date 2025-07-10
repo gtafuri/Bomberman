@@ -246,13 +246,23 @@ Inimigo* inicializarInimigos(const Mapa *mapa) {
     return lista;
 }
 
-// Verifica se a posição é válida para o inimigo andar
-int podeMoverInimigo(const Mapa *mapa, int x, int y) {
+// Verifica se a posição é válida para o inimigo andar - ALTERADO PARA NAO PASSAR POR CIMA DAS BOMBAS
+int podeMoverInimigo(const Mapa *mapa, const Bomba *bombas, int x, int y) {
     if (x < 0 || y < 0 || x >= mapa->colunas || y >= mapa->linhas)
         return 0;
     char c = mapa->matriz[y][x];
     if (c == 'W' || c == 'D' || c == 'K' || c == 'B' || c == 'E')
         return 0;
+
+    // Adicionar verificação para bombas ativas
+    const Bomba *current_bomba = bombas;
+    while (current_bomba != NULL) {
+        if (current_bomba->pos.x == x && current_bomba->pos.y == y && current_bomba->ativa) {
+            return 0; // Colidiu com uma bomba
+        }
+        current_bomba = current_bomba->prox;
+    }
+
     return 1;
 }
 
@@ -265,7 +275,7 @@ void limparInimigosMapa(Mapa *mapa) {
 }
 
 // Movimenta inimigos aleatoriamente e atualiza o mapa
-void atualizarInimigos(Inimigo *lista, Mapa *mapa, int frame) {
+void atualizarInimigos(Inimigo *lista, Mapa *mapa, const Bomba *bombas, int frame) {
     for (Inimigo *ini = lista; ini; ini = ini->prox) {
         if (!ini->ativo) continue;
         if (frame % INTERVALO_INIMIGO == 0) {
@@ -278,7 +288,7 @@ void atualizarInimigos(Inimigo *lista, Mapa *mapa, int frame) {
         if (ini->direcao == 3) dx = -1;
         int nx = ini->pos.x + dx;
         int ny = ini->pos.y + dy;
-        if (podeMoverInimigo(mapa, nx, ny)) {
+        if (podeMoverInimigo(mapa, bombas, nx, ny)) {
             mapa->matriz[ini->pos.y][ini->pos.x] = ' ';
             ini->pos.x = nx;
             ini->pos.y = ny;
@@ -546,7 +556,7 @@ int main(void) {
             for (Inimigo *ini = inimigos; ini; ini = ini->prox) {
                 mapa->matriz[ini->pos.y][ini->pos.x] = 'E';
             }
-            atualizarInimigos(inimigos, mapa, frame);
+            atualizarInimigos(inimigos, mapa, bombas, frame);
             tick_inimigo = 0;
         }
         removerInimigosExplodidos(&inimigos, mapa);
