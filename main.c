@@ -19,9 +19,6 @@
 
 #define MAX_MAPAS 100
 #define MAX_MAPA_PATH 260
-char mapas[MAX_MAPAS][MAX_MAPA_PATH];
-int total_mapas = 0;
-int mapa_atual = 0;
 
 // encontrar posição inicial do jogador
 void encontrarPosicaoJogador(const Mapa *mapa, Jogador *jogador) {
@@ -385,21 +382,21 @@ void desenharMenu(int selecionado) {
 }
 
 // Função para listar mapas disponíveis
-void listarMapas() {
+void listarMapas(char mapas[][MAX_MAPA_PATH], int *total_mapas) {
     DIR *d = opendir("maps");
     struct dirent *dir;
-    total_mapas = 0;
+    *total_mapas = 0;
     while ((dir = readdir(d)) != NULL) {
         if (strncmp(dir->d_name, "mapa", 4) == 0 && strstr(dir->d_name, ".txt")) {
-            snprintf(mapas[total_mapas], MAX_MAPA_PATH, "maps/%s", dir->d_name);
-            total_mapas++;
-            if (total_mapas >= MAX_MAPAS) break;
+            snprintf(mapas[*total_mapas], MAX_MAPA_PATH, "maps/%s", dir->d_name);
+            (*total_mapas)++;
+            if (*total_mapas >= MAX_MAPAS) break;
         }
     }
     closedir(d);
     // Ordenar mapas por nome
-    for (int i = 0; i < total_mapas-1; i++) {
-        for (int j = i+1; j < total_mapas; j++) {
+    for (int i = 0; i < *total_mapas-1; i++) {
+        for (int j = i+1; j < *total_mapas; j++) {
             if (strcmp(mapas[i], mapas[j]) > 0) {
                 char tmp[MAX_MAPA_PATH]; strcpy(tmp, mapas[i]); strcpy(mapas[i], mapas[j]); strcpy(mapas[j], tmp);
             }
@@ -420,12 +417,16 @@ int validarMapa(const Mapa *mapa) {
 
 int main(void) {
     const int screenWidth = 1200;
-    const int screenHeight = 600 + HUD_ALTURA;
+    const int screenHeight = 600;
     InitWindow(screenWidth, screenHeight, "Bomberman - Trabalho Prático");
     SetTargetFPS(60);
     srand(time(NULL));
 
-    listarMapas();
+    char mapas[MAX_MAPAS][MAX_MAPA_PATH];
+    int total_mapas = 0;
+    int mapa_atual = 0;
+    listarMapas(mapas, &total_mapas);
+
     if (total_mapas == 0) {
         printf("Nenhum mapa encontrado!\n");
         CloseWindow();
@@ -510,13 +511,20 @@ int main(void) {
         // Permitir abrir/fechar menu com TAB durante o jogo
         if (IsKeyPressed(KEY_TAB)) menu_aberto = !menu_aberto;
         if (menu_aberto) {
-            // Navegação
+            // Navegação por setas/W/S
             if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) menu_selecionado = (menu_selecionado + 1) % MENU_OPCOES;
             if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W)) menu_selecionado = (menu_selecionado - 1 + MENU_OPCOES) % MENU_OPCOES;
-            // Seleção
-            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
-                if (menu_selecionado == 0) { // Novo Jogo
-                    // Libere listas dinâmicas
+            // Seleção por ENTER/ESPAÇO
+            int acao = -1;
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) acao = menu_selecionado;
+            // Seleção por teclas específicas
+            if (IsKeyPressed(KEY_N)) acao = 0;
+            if (IsKeyPressed(KEY_S)) acao = 1;
+            if (IsKeyPressed(KEY_C)) acao = 2;
+            if (IsKeyPressed(KEY_Q)) acao = 3;
+            if (IsKeyPressed(KEY_V)) acao = 4;
+            if (acao != -1) {
+                if (acao == 0) { // Novo Jogo
                     while (bombas) { Bomba *tmp = bombas; bombas = bombas->prox; free(tmp); }
                     while (inimigos) { Inimigo *tmp = inimigos; inimigos = inimigos->prox; free(tmp); }
                     liberarMapa(mapa);
@@ -533,19 +541,19 @@ int main(void) {
                     invencivel = 0;
                     gameover = 0;
                     menu_aberto = 0;
-                } else if (menu_selecionado == 1) { // Salvar Jogo
+                } else if (acao == 1) { // Salvar Jogo
                     salvarJogo(&jogador, mapa, bombas, inimigos);
                     strcpy(mensagem, "Jogo salvo!");
                     tempo_mensagem = 120;
                     menu_aberto = 0;
-                } else if (menu_selecionado == 2) { // Carregar Jogo
+                } else if (acao == 2) { // Carregar Jogo
                     carregarJogo(&jogador, &mapa, &bombas, &inimigos);
                     strcpy(mensagem, "Jogo carregado!");
                     tempo_mensagem = 120;
                     menu_aberto = 0;
-                } else if (menu_selecionado == 3) { // Sair do Jogo
+                } else if (acao == 3) { // Sair do Jogo
                     break;
-                } else if (menu_selecionado == 4) { // Voltar
+                } else if (acao == 4) { // Voltar
                     menu_aberto = 0;
                 }
             }
@@ -627,13 +635,13 @@ int main(void) {
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        desenharMapa(mapa);
+        desenharMapa(mapa); // desenha de y=0 até y=499
         desenharBombas(bombas);
         desenharChaves(mapa);
         desenharInimigos(inimigos);
         DrawCircleLines(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-2, WHITE);
         DrawCircle(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-4, invencivel && (frame%10<5) ? Fade(BLUE,0.3f) : BLUE);
-        desenharHUD(&jogador);
+        desenharHUD(&jogador); // desenha a partir de y=500
         if (tempo_mensagem > 0) {
             DrawText(mensagem, 800, BLOCO * 25 + 50, 28, DARKGREEN);
             tempo_mensagem--;
