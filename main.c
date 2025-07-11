@@ -26,11 +26,6 @@
 
 #define MAX_RANK 10
 
-Sound explosionSound;
-Sound keySound;
-Sound hitSound;
-Music bgm;
-
 void atualizarRanking(int novaPontuacao, int *posicao) {
     int ranking[MAX_RANK] = {0};
     FILE *f = fopen(RANKING_FILE, "rb");
@@ -156,7 +151,7 @@ void desenharExplosoes() {
     }
 }
 
-void explodirBomba(Bomba *b, Jogador *jogador, Mapa *mapa) {
+void explodirBomba(Bomba *b, Jogador *jogador, Mapa *mapa, Sound explosionSound) {
     PlaySound(explosionSound);
     if (!b || !mapa) return; //checar mapa e bomba pra evitar erro
     
@@ -216,13 +211,13 @@ int jogadorAtingidoPorExplosao(const Bomba *b, const Jogador *jogador, const Map
 }
 
 // Atualiza bombas: decrementa timer, explode e remove
-void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencivel) {
+void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencivel , Sound hitSound, Sound explosionSound) {
     Bomba **ptr = lista;
     while (*ptr) {
         Bomba *b = *ptr;
         b->tempo_restante--;
         if (b->tempo_restante <= 0) {
-            explodirBomba(b, jogador, mapa);
+            explodirBomba(b, jogador, mapa, explosionSound);
             // Verifica se jogador está na explosão
             if (*invencivel == 0 && jogadorAtingidoPorExplosao(b, jogador, mapa)) {
                 jogador->vidas--;
@@ -268,7 +263,7 @@ void desenharChaves(const Mapa *mapa) {
 }
 
 // permitir coleta de chave
-void coletarChave(Jogador *jogador, Mapa *mapa) {
+void coletarChave(Jogador *jogador, Mapa *mapa , Sound keySound) {
     if (mapa->matriz[jogador->pos.y][jogador->pos.x] == 'C') {
         jogador->chaves++;
         mapa->matriz[jogador->pos.y][jogador->pos.x] = ' ';
@@ -377,7 +372,7 @@ void desenharInimigos(const Inimigo *lista) {
 }
 
 // Verifica colisão jogador-inimigo
-void checarColisaoJogadorInimigo(Jogador *jogador, Inimigo *lista, int *invencivel) {
+void checarColisaoJogadorInimigo(Jogador *jogador, Inimigo *lista, int *invencivel, Sound hitSound) {
     for (Inimigo *ini = lista; ini; ini = ini->prox) {
         if (ini->ativo && ini->pos.x == jogador->pos.x && ini->pos.y == jogador->pos.y && *invencivel == 0) {
             jogador->vidas--;
@@ -528,8 +523,13 @@ int validarMapa(const Mapa *mapa) {
 int main(void) {
     const int screenWidth = 1200;
     const int screenHeight = 600;
+
     InitWindow(screenWidth, screenHeight, "Bomberman - Trabalho Prático");
     InitAudioDevice();
+    Sound explosionSound; // Declaração do som de explosão
+    Sound keySound; // Declaração do som de chave
+    Sound hitSound; // Declaração do som de dano
+    Music bgm; // Declaração da música de fundo
     explosionSound = LoadSound("sounds/explosionSound.wav");
     keySound = LoadSound("sounds/key.mp3");
     hitSound = LoadSound("sounds/dano.ogg");
@@ -629,7 +629,7 @@ int main(void) {
             tick_inimigo = 0;
         }
         removerInimigosExplodidos(&inimigos, mapa);
-        checarColisaoJogadorInimigo(&jogador, inimigos, &invencivel);
+        checarColisaoJogadorInimigo(&jogador, inimigos, &invencivel, hitSound);
 
         // Permitir abrir/fechar menu com TAB durante o jogo
         if (IsKeyPressed(KEY_TAB)) menu_aberto = !menu_aberto;
@@ -733,10 +733,10 @@ int main(void) {
         }
 
         // Atualizar bombas (explosão)
-        atualizarBombas(&bombas, &jogador, mapa, &invencivel);
+        atualizarBombas(&bombas, &jogador, mapa, &invencivel, hitSound, explosionSound);
 
         // Coletar chave
-        coletarChave(&jogador, mapa);
+        coletarChave(&jogador, mapa, keySound);
         if (jogador.chaves >= 5) {
             mapa_atual++;
             if (mapa_atual >= total_mapas) {
@@ -803,4 +803,3 @@ int main(void) {
     return 0;
 }
 //e é isso professor :)
- 
