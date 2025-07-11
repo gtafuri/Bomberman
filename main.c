@@ -1,3 +1,4 @@
+//Código main referente ao jogo Bomberman implementado pra aula de Programação de Computadores em C 
 #include <raylib.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -481,7 +482,7 @@ void listarMapas(char mapas[][MAX_MAPA_PATH], int *total_mapas) {
     *total_mapas = 0;
     while ((dir = readdir(d)) != NULL) {
         if (strncmp(dir->d_name, "mapa", 4) == 0 && strstr(dir->d_name, ".txt")) {
-            // Check if the filename length plus "maps/" prefix fits in the buffer
+            // Checa tamanho do mapa pra ver evitar o warning de truncamentoq tava dando (acho q nunca daria erro de vdd pq os nomes dos arquivos são padronizados)
             if (strlen(dir->d_name) + 6 <= MAX_MAPA_PATH) {
                 snprintf(mapas[*total_mapas], MAX_MAPA_PATH, "maps/%s", dir->d_name);
                 (*total_mapas)++;
@@ -776,3 +777,4 @@ int main(void) {
     CloseWindow();
     return 0;
 }
+//e é isso professor :)
