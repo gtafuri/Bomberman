@@ -740,7 +740,7 @@ int main(void) {
         DrawCircleLines(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-2, WHITE);
         DrawCircle(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-4, invencivel && (frame%10<5) ? Fade(BLUE,0.3f) : BLUE);
         desenharExplosoes(); 
-        desenharHUD(&jogador); /
+        desenharHUD(&jogador); 
         if (tempo_mensagem > 0) {
             DrawText(mensagem, 800, BLOCO * 25 + 50, 28, DARKGREEN);
             tempo_mensagem--;
