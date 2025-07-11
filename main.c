@@ -26,6 +26,11 @@
 
 #define MAX_RANK 10
 
+Sound explosionSound;
+Sound keySound;
+Sound hitSound;
+Music bgm;
+
 void atualizarRanking(int novaPontuacao, int *posicao) {
     int ranking[MAX_RANK] = {0};
     FILE *f = fopen(RANKING_FILE, "rb");
@@ -152,6 +157,7 @@ void desenharExplosoes() {
 }
 
 void explodirBomba(Bomba *b, Jogador *jogador, Mapa *mapa) {
+    PlaySound(explosionSound);
     if (!b || !mapa) return; //checar mapa e bomba pra evitar erro
     
     int x0 = b->pos.x;
@@ -220,6 +226,7 @@ void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencive
             // Verifica se jogador está na explosão
             if (*invencivel == 0 && jogadorAtingidoPorExplosao(b, jogador, mapa)) {
                 jogador->vidas--;
+                PlaySound(hitSound);
                 jogador->pontuacao -= 100;
                 if (jogador->pontuacao < 0) jogador->pontuacao = 0;
                 *invencivel = 60;
@@ -265,6 +272,7 @@ void coletarChave(Jogador *jogador, Mapa *mapa) {
     if (mapa->matriz[jogador->pos.y][jogador->pos.x] == 'C') {
         jogador->chaves++;
         mapa->matriz[jogador->pos.y][jogador->pos.x] = ' ';
+        PlaySound(keySound);
     }
 }
 
@@ -373,6 +381,7 @@ void checarColisaoJogadorInimigo(Jogador *jogador, Inimigo *lista, int *invenciv
     for (Inimigo *ini = lista; ini; ini = ini->prox) {
         if (ini->ativo && ini->pos.x == jogador->pos.x && ini->pos.y == jogador->pos.y && *invencivel == 0) {
             jogador->vidas--;
+            PlaySound(hitSound);
             jogador->pontuacao -= 100;
             if (jogador->pontuacao < 0) jogador->pontuacao = 0;
             *invencivel = 60; // 1 segundo de invencel
@@ -480,6 +489,10 @@ void listarMapas(char mapas[][MAX_MAPA_PATH], int *total_mapas) {
     DIR *d = opendir("maps");
     struct dirent *dir;
     *total_mapas = 0;
+    if (d == NULL) {
+        // Diretório não encontrado, evita segfault
+        return;
+    }
     while ((dir = readdir(d)) != NULL) {
         if (strncmp(dir->d_name, "mapa", 4) == 0 && strstr(dir->d_name, ".txt")) {
             // Checa tamanho do mapa pra ver evitar o warning de truncamentoq tava dando (acho q nunca daria erro de vdd pq os nomes dos arquivos são padronizados)
@@ -516,6 +529,12 @@ int main(void) {
     const int screenWidth = 1200;
     const int screenHeight = 600;
     InitWindow(screenWidth, screenHeight, "Bomberman - Trabalho Prático");
+    InitAudioDevice();
+    explosionSound = LoadSound("sounds/explosionSound.wav");
+    keySound = LoadSound("sounds/key.mp3");
+    hitSound = LoadSound("sounds/dano.ogg");
+    bgm = LoadMusicStream("sounds/GameOver.wav");
+    PlayMusicStream(bgm);
     SetTargetFPS(60);
     srand(time(NULL));
 
@@ -561,6 +580,7 @@ int main(void) {
     int lastDirX = 1, lastDirY = 0; // Começa para a direita
 
     while (!WindowShouldClose()) {
+        UpdateMusicStream(bgm);
         if (jogador.vidas <= 0) gameover = 1;
         if (gameover) {
             int posicao_rank = -1;
@@ -774,7 +794,13 @@ int main(void) {
         free(tmp);
     }
     liberarMapa(mapa);
+    UnloadSound(explosionSound);
+    UnloadSound(keySound);
+    UnloadSound(hitSound);
+    UnloadMusicStream(bgm);
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }
 //e é isso professor :)
+ 
