@@ -83,6 +83,10 @@ int podeMover(const Mapa *mapa, const Bomba *bombas, int x, int y) {
 // Adiciona bomba na lista
 void plantarBomba(Bomba **lista, int x, int y) {
     Bomba *nova = malloc(sizeof(Bomba));
+    if (nova == NULL) {
+        // erro na alocaçao
+        return;
+    }
     nova->pos.x = x;
     nova->pos.y = y;
     nova->tempo_restante = TEMPO_BOMBA;
@@ -127,10 +131,6 @@ void desenharExplosoes() {
             // Desenhar o raio de explosão em vermelho
             int x = explosoes[i].x * BLOCO;
             int y = explosoes[i].y * BLOCO;
-            int frame = explosoes[i].frame;
-            
-            // Calcular transparência baseada no frame
-            float alpha = 1.0f - (frame / 20.0f);
             
             // Desenhar retângulo vermelho 
             DrawRectangle(x, y, BLOCO, BLOCO, RED);
@@ -151,6 +151,8 @@ void desenharExplosoes() {
 }
 
 void explodirBomba(Bomba *b, Jogador *jogador, Mapa *mapa) {
+    if (!b || !mapa) return; //checar mapa e bomba pra evitar erro
+    
     int x0 = b->pos.x;
     int y0 = b->pos.y;
     adicionarExplosao(x0, y0); // Centro da explosão
@@ -233,7 +235,6 @@ void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencive
 // Desenha bombas no mapa com animação de piscar
 void desenharBombas(const Bomba *lista) {
     while (lista) {
-
         Color cor_bomba = BLACK;
         if (lista->tempo_restante <= 30) { // Piscar nos últimos 30 frames 
             if ((lista->tempo_restante / 3) % 2 == 0) {
@@ -243,6 +244,7 @@ void desenharBombas(const Bomba *lista) {
             }
         }
         DrawCircle(lista->pos.x * BLOCO + BLOCO/2, lista->pos.y * BLOCO + BLOCO/2, BLOCO/2 - 2, cor_bomba); 
+        lista = lista->prox;
     }
 }
 
@@ -272,6 +274,10 @@ Inimigo* inicializarInimigos(const Mapa *mapa) {
         for (int j = 0; j < mapa->colunas; j++) {
             if (mapa->matriz[i][j] == 'E') {
                 Inimigo *novo = malloc(sizeof(Inimigo));
+                if (novo == NULL) {
+                    // erro na alocaçao
+                    continue;
+                }
                 novo->pos.x = j;
                 novo->pos.y = i;
                 novo->direcao = GetRandomValue(0, 3);
@@ -475,9 +481,12 @@ void listarMapas(char mapas[][MAX_MAPA_PATH], int *total_mapas) {
     *total_mapas = 0;
     while ((dir = readdir(d)) != NULL) {
         if (strncmp(dir->d_name, "mapa", 4) == 0 && strstr(dir->d_name, ".txt")) {
-            snprintf(mapas[*total_mapas], MAX_MAPA_PATH, "maps/%s", dir->d_name);
-            (*total_mapas)++;
-            if (*total_mapas >= MAX_MAPAS) break;
+            // Check if the filename length plus "maps/" prefix fits in the buffer
+            if (strlen(dir->d_name) + 6 <= MAX_MAPA_PATH) {
+                snprintf(mapas[*total_mapas], MAX_MAPA_PATH, "maps/%s", dir->d_name);
+                (*total_mapas)++;
+                if (*total_mapas >= MAX_MAPAS) break;
+            }
         }
     }
     closedir(d);
@@ -690,11 +699,15 @@ int main(void) {
         if ((IsKeyPressed(KEY_B) || IsKeyPressed(KEY_SPACE)) && jogador.bombas > 0) {
             int bx = jogador.pos.x + lastDirX;
             int by = jogador.pos.y + lastDirY;
-            // Só planta se houver direção pressionada e espaço válido, e se não houver bomba já na posição
-            // A função podeMover já verifica a colisão com bombas, então podemos usá-la aqui.
-            if (podeMover(mapa, bombas, bx, by)) { // Reusa podeMover para verificar se o local da bomba é válido
-                plantarBomba(&bombas, bx, by);
-                jogador.bombas--;
+            
+            // Verificar se a posição da bomba está dentro dos limites do mapa
+            if (bx >= 0 && bx < mapa->colunas && by >= 0 && by < mapa->linhas) {
+                // Só planta se houver direção pressionada e espaço válido, e se não houver bomba já na posição
+                // A função podeMover já verifica a colisão com bombas, então podemos usá-la aqui.
+                if (podeMover(mapa, bombas, bx, by)) { // Reusa podeMover para verificar se o local da bomba é válido
+                    plantarBomba(&bombas, bx, by);
+                    jogador.bombas--;
+                }
             }
         }
 
