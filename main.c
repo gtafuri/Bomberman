@@ -7,20 +7,22 @@
 #include "mapa.h"
 #include "ui.h"
 #include <time.h>
-#include <dirent.h> // para ver o diretorio de mapas
+#include <dirent.h> // para ver o diretorio de mapas e verificar quantas fases terá
 
 #define MAPA_ARQUIVO "maps/mapa1.txt"
 #define BLOCO 20
 #define HUD_ALTURA 100
 #define TEMPO_BOMBA 180
 #define RAIO_EXPLOSAO 2
-#define INTERVALO_INIMIGO 40 // frames para mudar direção dos inimigos (acho q da pra diminuir e botar mais lento)
-#define SAVE_FILE "savegame.bin"
+#define INTERVALO_INIMIGO 40 // frames para mudar direção dos inimigos (da pra alterar se acharem que tá lento, mas testando me parece a velocidade ok)
+
+#define SAVE_FILE "savegame.bin" // arquivo de salvamento do jogo
 
 #define MAX_MAPAS 100
 #define MAX_MAPA_PATH 260
 
-#define RANKING_FILE "ranking.bin"
+#define RANKING_FILE "ranking.bin" // arquivo de ranking
+
 #define MAX_RANK 10
 
 void atualizarRanking(int novaPontuacao, int *posicao) {
@@ -89,8 +91,7 @@ void plantarBomba(Bomba **lista, int x, int y) {
     *lista = nova;
 }
 
-// Adicionar estrutura para animação de explosão
-// não soube usar isso aq direito galera alguem reve aí pfvr, a ideia é amimar alguns quadradinhos pra mostrar a explosao
+
 #define MAX_EXPLOSIONS 32
 
 typedef struct {
@@ -100,6 +101,13 @@ typedef struct {
 } ExplosionAnim;
 
 ExplosionAnim explosoes[MAX_EXPLOSIONS] = {0};
+
+void limparExplosoes() {
+    for (int i = 0; i < MAX_EXPLOSIONS; i++) {
+        explosoes[i].ativa = 0;
+        explosoes[i].frame = 0;
+    }
+}
 
 void adicionarExplosao(int x, int y) {
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
@@ -116,37 +124,59 @@ void adicionarExplosao(int x, int y) {
 void desenharExplosoes() {
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
         if (explosoes[i].ativa) {
-            float raio = BLOCO/2 + explosoes[i].frame*2;
-            Color cor = (explosoes[i].frame % 2 == 0) ? YELLOW : ORANGE;
-            DrawCircle(explosoes[i].x * BLOCO + BLOCO/2, explosoes[i].y * BLOCO + BLOCO/2, raio, Fade(cor, 0.7f));
+            // Desenhar o raio de explosão em vermelho
+            int x = explosoes[i].x * BLOCO;
+            int y = explosoes[i].y * BLOCO;
+            int frame = explosoes[i].frame;
+            
+            // Calcular transparência baseada no frame
+            float alpha = 1.0f - (frame / 20.0f);
+            
+            // Desenhar retângulo vermelho 
+            DrawRectangle(x, y, BLOCO, BLOCO, RED);
+            
+            // Adicionar borda branca
+            DrawRectangleLines(x, y, BLOCO, BLOCO, WHITE);
+            
+            // círculo vermelho no centro
+            DrawCircle(x + BLOCO/2, y + BLOCO/2, BLOCO/3, RED);
+            
+            // círculo branco menor no centro
+            DrawCircle(x + BLOCO/2, y + BLOCO/2, BLOCO/6, WHITE);
+            
             explosoes[i].frame++;
-            if (explosoes[i].frame > 8) explosoes[i].ativa = 0;
+            if (explosoes[i].frame > 20) explosoes[i].ativa = 0;
         }
     }
 }
 
-// Modificar explodirBomba para adicionar animação
 void explodirBomba(Bomba *b, Jogador *jogador, Mapa *mapa) {
     int x0 = b->pos.x;
     int y0 = b->pos.y;
-    adicionarExplosao(x0, y0);
+    adicionarExplosao(x0, y0); // Centro da explosão
+    
     for (int d = 0; d < 4; d++) {
         int dx = 0, dy = 0;
         if (d == 0) dx = 1;   // Direita
         if (d == 1) dx = -1;  // Esquerda
         if (d == 2) dy = 1;   // Baixo
         if (d == 3) dy = -1;  // Cima
+        
         for (int r = 1; r <= RAIO_EXPLOSAO; r++) {
             int x = x0 + dx * r;
             int y = y0 + dy * r;
+            
             if (x < 0 || y < 0 || x >= mapa->colunas || y >= mapa->linhas) break;
+            
+            adicionarExplosao(x, y);
+            
             char *c = &mapa->matriz[y][x];
-            if (*c == 'W') break;
-            if (*c == 'D') { *c = ' '; jogador->pontuacao += 10; adicionarExplosao(x, y); break; }
-            if (*c == 'K') { *c = 'C'; jogador->pontuacao += 10; adicionarExplosao(x, y); break; }
-            if (*c == 'B') { *c = ' '; jogador->pontuacao += 10; adicionarExplosao(x, y); break; }
-            if (*c == 'E') { *c = ' '; jogador->pontuacao += 20; adicionarExplosao(x, y); }
-            else adicionarExplosao(x, y);
+            if (*c == 'W') break; // Parede para a explosão
+            if (*c == 'D') { *c = ' '; jogador->pontuacao += 10; break; } //a pontuaçao aumetna quando explode objetos
+            if (*c == 'K') { *c = 'C'; jogador->pontuacao += 10; break; }
+            if (*c == 'B') { *c = ' '; jogador->pontuacao += 10; break; }
+            if (*c == 'E') { *c = ' '; jogador->pontuacao += 20; }
+          
         }
     }
 }
@@ -176,7 +206,7 @@ int jogadorAtingidoPorExplosao(const Bomba *b, const Jogador *jogador, const Map
     return 0;
 }
 
-// Atualiza bombas: decrementa timer, explode e remove se necessário
+// Atualiza bombas: decrementa timer, explode e remove
 void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencivel) {
     Bomba **ptr = lista;
     while (*ptr) {
@@ -200,11 +230,19 @@ void atualizarBombas(Bomba **lista, Jogador *jogador, Mapa *mapa, int *invencive
     }
 }
 
-// Desenha bombas no mapa
+// Desenha bombas no mapa com animação de piscar
 void desenharBombas(const Bomba *lista) {
     while (lista) {
-        DrawCircle(lista->pos.x * BLOCO + BLOCO/2, lista->pos.y * BLOCO + BLOCO/2, BLOCO/2 - 2, BLACK);
-        lista = lista->prox;
+
+        Color cor_bomba = BLACK;
+        if (lista->tempo_restante <= 30) { // Piscar nos últimos 30 frames 
+            if ((lista->tempo_restante / 3) % 2 == 0) {
+                cor_bomba = RED; // Piscar em vermelho
+            } else {
+                cor_bomba = BLACK;
+            }
+        }
+        DrawCircle(lista->pos.x * BLOCO + BLOCO/2, lista->pos.y * BLOCO + BLOCO/2, BLOCO/2 - 2, cor_bomba); 
     }
 }
 
@@ -219,7 +257,7 @@ void desenharChaves(const Mapa *mapa) {
     }
 }
 
-// No loop principal, permitir coleta de chave
+// permitir coleta de chave
 void coletarChave(Jogador *jogador, Mapa *mapa) {
     if (mapa->matriz[jogador->pos.y][jogador->pos.x] == 'C') {
         jogador->chaves++;
@@ -411,6 +449,7 @@ void carregarJogo(Jogador *jogador, Mapa **mapa, Bomba **bombas, Inimigo **inimi
 }
 
 // Variável para mensagem temporária
+//usada para mostrar a mensagem de salvamento ou carregamento 
 char mensagem[64] = "";
 int tempo_mensagem = 0;
 
@@ -626,7 +665,7 @@ int main(void) {
         if (pode_andar) {
             int dx = 0, dy = 0;
 
-            // ALTERADO PARA NAO CORRER NA DIAGONAL
+            // ALTERADO PARA NAO CORRER NA DIAGONAL (elseif)
             if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) {
                 dy = -1;
             } else if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) {
@@ -694,13 +733,14 @@ int main(void) {
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        desenharMapa(mapa); // desenha de y=0 até y=499
+        desenharMapa(mapa); 
         desenharBombas(bombas);
         desenharChaves(mapa);
         desenharInimigos(inimigos);
         DrawCircleLines(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-2, WHITE);
         DrawCircle(jogador.pos.x * BLOCO + BLOCO/2, jogador.pos.y * BLOCO + BLOCO/2, BLOCO/2-4, invencivel && (frame%10<5) ? Fade(BLUE,0.3f) : BLUE);
-        desenharHUD(&jogador); // desenha a partir de y=500
+        desenharExplosoes(); 
+        desenharHUD(&jogador); /
         if (tempo_mensagem > 0) {
             DrawText(mensagem, 800, BLOCO * 25 + 50, 28, DARKGREEN);
             tempo_mensagem--;
